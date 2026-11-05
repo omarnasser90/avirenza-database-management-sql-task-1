@@ -1,0 +1,78 @@
+-- AVIRENZA Coaching Centre Database — Constraint Verification
+-- Database engine used for captured results: MySQL v9 in DB Fiddle
+-- Run 01-schema.sql and 02-sample-data.sql first, on a fresh database.
+-- All five tests are INTENTIONALLY INVALID. Run separately, one at a time.
+-- The SQL statements are commented out so that normal setup does not fail.
+-- See screenshots/constraint-errors.png and screenshots/trigger-errors.png for the captured DB Fiddle messages.
+
+-- ============================================================
+-- TEST 1: CHECK constraint — reject unsupported exam type
+-- ============================================================
+-- INSERT INTO batches
+--     (batch_name, exam_type, schedule_day, start_time, end_time)
+-- VALUES
+--     ('INVALID-SAT', 'SAT', 'Monday', '09:00:00', '11:00:00');
+--
+-- Actual error captured in DB Fiddle:
+-- Query Error: Check constraint 'check_exam_type' is violated.
+-- Outcome: PASS — invalid exam types are rejected.
+
+-- ============================================================
+-- TEST 2: UNIQUE constraint — reject duplicate subject name
+-- ============================================================
+-- INSERT INTO subjects (subject_name)
+-- VALUES ('Mathematics');
+--
+-- Actual error captured in DB Fiddle:
+-- Query Error: Duplicate entry 'Mathematics' for key 'subjects.subjects_name_unique'
+-- Outcome: PASS — duplicate subject names are rejected.
+
+-- ============================================================
+-- TEST 3: FOREIGN KEY — reject nonexistent parent
+-- ============================================================
+-- INSERT INTO students (student_name, student_phone, parent_id)
+-- VALUES ('Invalid Student', 'STU-999', 9999);
+--
+-- Actual error captured in DB Fiddle:
+-- Query Error: Cannot add or update a child row: a foreign key constraint fails
+-- (`test`.`students`, CONSTRAINT `students_parent_fk` FOREIGN KEY (`parent_id`)
+-- REFERENCES `parents` (`parent_id`) ON DELETE RESTRICT)
+-- Outcome: PASS — an unknown parent_id is rejected.
+
+-- ============================================================
+-- ADDITIONAL DATA-QUALITY QUERY (successful read, NOT a constraint)
+-- ============================================================
+-- Returns rows whose marks exceed the test maximum or whose enrollment
+-- belongs to a different batch from the test. Expected: zero rows for
+-- the provided fictional sample data.
+--
+-- SELECT r.result_id,
+--        r.marks, t.max_marks,
+--        e.batch_id AS enrollment_batch,
+--        bs.batch_id AS test_batch
+-- FROM test_results AS r
+-- JOIN tests AS t ON t.test_id = r.test_id
+-- JOIN batch_subjects AS bs ON bs.batch_subject_id = t.batch_subject_id
+-- JOIN enrollments AS e ON e.enrollment_id = r.enrollment_id
+-- WHERE r.marks > t.max_marks OR e.batch_id <> bs.batch_id;
+--
+-- IMPORTANT: This query detects bad existing data. BEFORE INSERT and BEFORE
+-- UPDATE triggers protect writes to test_results, but updates to related
+-- parent rows can still invalidate an already recorded result.
+
+
+-- ============================================================
+-- TEST 4: TRIGGER + CHECK — reject marks above the test maximum
+-- ============================================================
+-- UPDATE test_results SET marks = 120 WHERE result_id = 1;
+-- Actual error captured in DB Fiddle:
+-- Query Error: Check constraint 'check_marks' is violated.
+-- Outcome: PASS — for test 1 with max_marks=100, the invalid update fails.
+
+-- ============================================================
+-- TEST 5: TRIGGER + NOT NULL — reject enrollment from wrong test batch
+-- ============================================================
+-- UPDATE test_results SET enrollment_id = 3 WHERE result_id = 1;
+-- Actual error captured in DB Fiddle:
+-- Query Error: Column 'enrollment_id' cannot be null.
+-- Outcome: PASS — enrollment 3 belongs to JEE-B and test 1 to JEE-A.
